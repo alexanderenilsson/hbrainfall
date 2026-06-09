@@ -335,7 +335,7 @@
 </div>
 
 <script>
-const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6eDcquk_GjPFBNt54aXVQPfHMYclEDoNeHET4YPqRIIBcwOUtWx6KLA-e-w5nPNZftTgONoObl40A/pub?gid=1712837657&single=true&output=csv';
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6eDcquk_GjPFBNt54aXVQPfHMYclEDoNeHET4YPqRIIBcwOUtWx6KLA-e-w5nPNZftTgONoObl40A/pub?gid=1007788289&single=true&output=csv';
 
 const MONTH_LABELS = { 4:'Apr', 5:'Maj', 6:'Jun', 7:'Jul', 8:'Aug', 9:'Sep', 10:'Okt', 11:'Nov' };
 
@@ -344,41 +344,46 @@ const PALETTE = [
   '#3b7a6e','#8a7a2e','#1a4e8a','#8a4b1a','#4a8a5b',
 ];
 
-// ── CSV parser ─────────────────────────────────────────────────────────
+// ── CSV parser — reads raw log sheet, aggregates by year+month ──────────
 function parseCSV(text) {
-  const firstLine = text.trim().split("\n")[0];
-  const sep = firstLine.includes("\t") ? "\t" : ",";
-  const lines = text.trim().split("\n").map(l =>
-    l.split(sep).map(c => c.trim().replace(/^"|"$/g, ""))
-  );
+  const lines = text.trim().split('\n');
+  // Detect separator
+  const sep = lines[0].includes('\t') ? '\t' : ',';
+  const rows = lines.map(l => l.split(sep).map(c => c.trim().replace(/^"|"$/g, '')));
 
-  // Extract years from header (ignore empty/non-year cells)
-  const header = lines[0];
-  const years = [];
-  header.forEach(cell => {
-    const y = Number(cell);
-    if (!isNaN(y) && y > 2000) years.push(y);
+  // Skip header row(s): skip until we find a row where col 0 looks like a date
+  const dataRows = rows.filter(r => /^\d{4}-\d{2}-\d{2}/.test(r[0]));
+
+  // col 1 = mm, col 3 = fastställd tid (YYYY-MM-DD ...)
+  const agg = {}; // agg[year][month] = total mm
+
+  for (const row of dataRows) {
+    const mm = parseFloat((row[1] || '').replace(',', '.'));
+    if (isNaN(mm) || mm <= 0) continue;
+
+    // Use col 3 (fastställd tid) for year+month; fall back to col 0
+    const ts = row[3] && /^\d{4}/.test(row[3]) ? row[3] : row[0];
+    const match = ts.match(/^(\d{4})-(\d{2})/);
+    if (!match) continue;
+
+    const yr = parseInt(match[1]);
+    const mo = parseInt(match[2]);
+    if (!agg[yr]) agg[yr] = {};
+    agg[yr][mo] = (agg[yr][mo] || 0) + mm;
+  }
+
+  const years  = Object.keys(agg).map(Number).sort((a, b) => a - b);
+  const monthSet = new Set();
+  years.forEach(yr => Object.keys(agg[yr]).forEach(m => monthSet.add(Number(m))));
+  const months = Array.from(monthSet).sort((a, b) => a - b);
+
+  // Convert to data[year][month]
+  const data = {};
+  years.forEach(yr => {
+    data[yr] = {};
+    months.forEach(mo => { data[yr][mo] = agg[yr][mo] || null; });
   });
 
-  const data = {};
-  years.forEach(y => data[y] = {});
-  const allMonths = new Set();
-
-  for (let i = 1; i < lines.length; i++) {
-    const row = lines[i];
-    const month = parseInt(row[0]);
-    if (isNaN(month)) continue;
-    allMonths.add(month);
-    // Skip empty cells after month label, then read one value per year
-    let dataStart = 1;
-    while (dataStart < row.length && row[dataStart] === "") dataStart++;
-    years.forEach((yr, j) => {
-      const raw = row[dataStart + j] || "";
-      const val = parseFloat(raw.replace(",", "."));
-      data[yr][month] = isNaN(val) ? null : val;
-    });
-  }
-  const months = Array.from(allMonths).sort((a, b) => a - b);
   return { years, months, data };
 }
 
