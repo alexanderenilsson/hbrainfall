@@ -346,25 +346,35 @@ const PALETTE = [
 
 // ── CSV parser ─────────────────────────────────────────────────────────
 function parseCSV(text) {
-  const firstLine = text.trim().split('\n')[0];
-  const sep = firstLine.includes('\t') ? '\t' : ',';
-  const lines = text.trim().split('\n').map(l =>
-    l.split(sep).map(c => c.trim().replace(/^"|"$/g, ''))
+  const firstLine = text.trim().split("\n")[0];
+  const sep = firstLine.includes("\t") ? "\t" : ",";
+  const lines = text.trim().split("\n").map(l =>
+    l.split(sep).map(c => c.trim().replace(/^"|"$/g, ""))
   );
+
+  // Extract years from header (ignore empty/non-year cells)
   const header = lines[0];
-  const years = header.slice(1).map(Number).filter(y => !isNaN(y) && y > 2000);
-  const yearCols = years.map(y => header.indexOf(String(y)));
+  const years = [];
+  header.forEach(cell => {
+    const y = Number(cell);
+    if (!isNaN(y) && y > 2000) years.push(y);
+  });
+
   const data = {};
   years.forEach(y => data[y] = {});
   const allMonths = new Set();
+
   for (let i = 1; i < lines.length; i++) {
     const row = lines[i];
     const month = parseInt(row[0]);
     if (isNaN(month)) continue;
     allMonths.add(month);
+    // Skip empty cells after month label, then read one value per year
+    let dataStart = 1;
+    while (dataStart < row.length && row[dataStart] === "") dataStart++;
     years.forEach((yr, j) => {
-      const raw = row[yearCols[j]];
-      const val = parseFloat((raw || '').replace(',', '.'));
+      const raw = row[dataStart + j] || "";
+      const val = parseFloat(raw.replace(",", "."));
       data[yr][month] = isNaN(val) ? null : val;
     });
   }
