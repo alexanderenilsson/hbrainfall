@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nederbörd – Hamrabacken</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f0f4f0;
+    --surface: #ffffff;
+    --border: #d4ddd4;
+    --text: #1a2a1a;
+    --muted: #6a7f6a;
+    --accent: #2d5a2d;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    padding: 2rem 1.5rem 3rem;
+  }
+
+  header {
+    max-width: 860px;
+    margin: 0 auto 2rem;
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    border-bottom: 1.5px solid var(--accent);
+    padding-bottom: 0.75rem;
+  }
+
+  h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .subtitle {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .updated {
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    margin-left: auto;
+    opacity: 0.7;
+  }
+
+  .card {
+    max-width: 860px;
+    margin: 0 auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 1.5rem;
+  }
+
+  .year-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1.5rem;
+    align-items: center;
+  }
+
+  .year-controls label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-right: 0.4rem;
+    text-transform: uppercase;
+  }
+
+  .btn-year {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.3rem 0.7rem;
+    border: 1.5px solid var(--border);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .btn-year::before {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 5px;
+    background: currentColor;
+    opacity: 0.4;
+    vertical-align: middle;
+  }
+
+  .btn-year.active {
+    border-color: currentColor;
+    color: inherit;
+  }
+
+  .btn-year.active::before { opacity: 1; }
+  .btn-year:hover { opacity: 0.75; }
+
+  .controls-meta {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+
+  .btn-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .btn-meta:hover { background: var(--bg); }
+
+  .chart-wrap {
+    position: relative;
+    height: 380px;
+  }
+
+  .totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .total-chip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid var(--border);
+  }
+
+  .total-chip .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .total-chip .val { font-weight: 600; }
+  .total-chip .yr  { color: var(--muted); }
+
+  #status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+    padding: 2rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Hamrabacken</h1>
+  <span class="subtitle">Nederbörd maj–okt &nbsp;·&nbsp; mm/månad</span>
+  <span class="updated" id="updatedLabel"></span>
+</header>
+
+<div class="card">
+  <div id="status">Hämtar data…</div>
+  <div id="app" style="display:none">
+    <div class="year-controls" id="yearControls">
+      <label>År</label>
+      <div class="controls-meta">
+        <button class="btn-meta" id="btnAll">Alla</button>
+        <button class="btn-meta" id="btnNone">Inga</button>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chart"></canvas>
+    </div>
+    <div class="totals" id="totals"></div>
+  </div>
+</div>
+
+<script>
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT6eDcquk_GjPFBNt54aXVQPfHMYclEDoNeHET4YPqRIIBcwOUtWx6KLA-e-w5nPNZftTgONoObl40A/pub?gid=1712837657&single=true&output=csv';
+
+const MONTH_LABELS = { 4:'Apr', 5:'Maj', 6:'Jun', 7:'Jul', 8:'Aug', 9:'Sep', 10:'Okt', 11:'Nov' };
+
+const PALETTE = [
+  '#5b8a3c','#2e7d9b','#b5701a','#7a3b8a','#b5272e',
+  '#3b7a6e','#8a7a2e','#1a4e8a','#8a4b1a','#4a8a5b',
+];
+
+// ── Parse CSV ──────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+  // First row: "Månad", year1, year2, ...
+  const header = lines[0];
+  const years = header.slice(1).map(Number).filter(y => !isNaN(y) && y > 2000);
+  const yearCols = years.map(y => header.indexOf(String(y)));
+
+  const data = {}; // data[year][month] = mm
+  years.forEach(y => data[y] = {});
+
+  const allMonths = new Set();
+
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const month = parseInt(row[0]);
+    if (isNaN(month)) continue;
+    allMonths.add(month);
+    years.forEach((yr, j) => {
+      const raw = row[yearCols[j]];
+      const val = parseFloat((raw || '').replace(',', '.'));
+      data[yr][month] = isNaN(val) ? null : val;
+    });
+  }
+
+  const months = Array.from(allMonths).sort((a, b) => a - b);
+  return { years, months, data };
+}
+
+// ── Main ───────────────────────────────────────────────────────────────
+async function init() {
+  let parsed;
+  try {
+    const res = await fetch(CSV_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    parsed = parseCSV(text);
+  } catch (e) {
+    document.getElementById('status').textContent = 'Kunde inte hämta data. Kontrollera att sheetet är publicerat.';
+    console.error(e);
+    return;
+  }
+
+  document.getElementById('status').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('updatedLabel').textContent = 'Uppdaterad ' + new Date().toLocaleDateString('sv-SE');
+
+  const { years, months, data } = parsed;
+  const monthLabels = months.map(m => MONTH_LABELS[m] || m);
+  const active = new Set(years);
+  const btns = {};
+
+  // ── Chart ──────────────────────────────────────────────────────────
+  function makeDatasets() {
+    return years.map((yr, i) => ({
+      label: String(yr),
+      data: months.map(m => data[yr][m] ?? null),
+      borderColor: PALETTE[i % PALETTE.length],
+      backgroundColor: PALETTE[i % PALETTE.length] + '22',
+      pointBackgroundColor: PALETTE[i % PALETTE.length],
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      borderWidth: 2,
+      tension: 0.35,
+      hidden: !active.has(yr),
+      spanGaps: false,
+    }));
+  }
+
+  const ctx = document.getElementById('chart').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: monthLabels, datasets: makeDatasets() },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a2a1aee',
+          titleFont: { family: "'IBM Plex Mono', monospace", size: 11 },
+          bodyFont:  { family: "'IBM Plex Mono', monospace", size: 11 },
+          padding: 10,
+          callbacks: {
+            label: c => ` ${c.dataset.label}: ${c.parsed.y != null ? c.parsed.y + ' mm' : '–'}`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#d4ddd440' },
+          ticks: { font: { family: "'IBM Plex Mono', monospace", size: 11 }, color: '#6a7f6a' },
+          border: { color: '#d4ddd4' },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: '#d4ddd440' },
+          ticks: { font: { family: "'IBM Plex Mono', monospace", size: 11 }, color: '#6a7f6a', callback: v => v + ' mm' },
+          border: { color: '#d4ddd4' },
+        }
+      }
+    }
+  });
+
+  // ── Year buttons ───────────────────────────────────────────────────
+  const controls = document.getElementById('yearControls');
+  const metaDiv  = controls.querySelector('.controls-meta');
+
+  years.forEach((yr, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    const btn = document.createElement('button');
+    btn.className = 'btn-year active';
+    btn.textContent = yr;
+    btn.style.color = color;
+    btn.addEventListener('click', () => {
+      if (active.has(yr)) { active.delete(yr); btn.classList.remove('active'); }
+      else                 { active.add(yr);    btn.classList.add('active');    }
+      update();
+    });
+    controls.insertBefore(btn, metaDiv);
+    btns[yr] = btn;
+  });
+
+  document.getElementById('btnAll').addEventListener('click', () => {
+    years.forEach(yr => { active.add(yr); btns[yr].classList.add('active'); });
+    update();
+  });
+  document.getElementById('btnNone').addEventListener('click', () => {
+    years.forEach(yr => { active.delete(yr); btns[yr].classList.remove('active'); });
+    update();
+  });
+
+  function update() {
+    chart.data.datasets.forEach(ds => { ds.hidden = !active.has(Number(ds.label)); });
+    chart.update();
+    renderTotals();
+  }
+
+  // ── Totals ─────────────────────────────────────────────────────────
+  function renderTotals() {
+    const el = document.getElementById('totals');
+    el.innerHTML = '';
+    years.forEach((yr, i) => {
+      if (!active.has(yr)) return;
+      const total = months.reduce((s, m) => s + (data[yr][m] || 0), 0);
+      const color = PALETTE[i % PALETTE.length];
+      const chip = document.createElement('div');
+      chip.className = 'total-chip';
+      chip.innerHTML = `<span class="dot" style="background:${color}"></span><span class="yr">${yr}</span><span class="val">${Math.round(total)} mm</span>`;
+      el.appendChild(chip);
+    });
+  }
+
+  renderTotals();
+}
+
+init();
+</script>
+</body>
+</html>
