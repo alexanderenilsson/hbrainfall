@@ -351,23 +351,41 @@ function parseCSV(text) {
   const sep = lines[0].includes('\t') ? '\t' : ',';
   const rows = lines.map(l => l.split(sep).map(c => c.trim().replace(/^"|"$/g, '')));
 
-  // Skip header row(s): skip until we find a row where col 0 looks like a date
-  const dataRows = rows.filter(r => /^\d{4}-\d{2}-\d{2}/.test(r[0]));
+  // Helper: convert Excel serial date to {year, month}
+  function serialToYearMonth(val) {
+    const serial = parseFloat(String(val).replace(',', '.'));
+    if (isNaN(serial)) return null;
+    // Excel epoch: 1899-12-30
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000);
+    return { yr: d.getUTCFullYear(), mo: d.getUTCMonth() + 1 };
+  }
 
-  // col 1 = mm, col 3 = fastställd tid (YYYY-MM-DD ...)
+  // Helper: parse ISO date string to {year, month}
+  function isoToYearMonth(ts) {
+    const m = ts.match(/^(\d{4})-(\d{2})/);
+    return m ? { yr: parseInt(m[1]), mo: parseInt(m[2]) } : null;
+  }
+
+  // Skip header rows
+  const dataRows = rows.filter(r => r[1] !== '' && r[1] !== undefined && !isNaN(parseFloat((r[1]||'').replace(',','.'))));
+
+  // col 1 = mm, col 3 = fastställd tid (serial number or ISO date)
   const agg = {}; // agg[year][month] = total mm
 
   for (const row of dataRows) {
     const mm = parseFloat((row[1] || '').replace(',', '.'));
     if (isNaN(mm) || mm <= 0) continue;
 
-    // Use col 3 (fastställd tid) for year+month; fall back to col 0
-    const ts = row[3] && /^\d{4}/.test(row[3]) ? row[3] : row[0];
-    const match = ts.match(/^(\d{4})-(\d{2})/);
-    if (!match) continue;
+    const tsRaw = row[3] || row[0] || '';
+    let ym = null;
+    if (/^\d{4}-\d{2}/.test(tsRaw)) {
+      ym = isoToYearMonth(tsRaw);
+    } else {
+      ym = serialToYearMonth(tsRaw);
+    }
+    if (!ym) continue;
 
-    const yr = parseInt(match[1]);
-    const mo = parseInt(match[2]);
+    const { yr, mo } = ym;
     if (!agg[yr]) agg[yr] = {};
     agg[yr][mo] = (agg[yr][mo] || 0) + mm;
   }
