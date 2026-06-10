@@ -264,6 +264,21 @@
   .total-chip .val { font-weight: 600; }
   .total-chip .yr  { color: var(--muted); }
 
+  .last-entry {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-bottom: 1.2rem;
+    padding: 0.4rem 0.7rem;
+    border-left: 2px solid var(--accent);
+    background: var(--bg);
+  }
+
+  .last-entry strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
   #status {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.8rem;
@@ -286,6 +301,7 @@
 
 <div class="card">
   <div id="status">Hämtar data…</div>
+  <div id="lastEntry" style="display:none" class="last-entry"></div>
   <div id="app" style="display:none">
 
     <!-- View tabs -->
@@ -402,7 +418,27 @@ function parseCSV(text) {
     months.forEach(mo => { data[yr][mo] = agg[yr][mo] || null; });
   });
 
-  return { years, months, data };
+  // Find last logged entry (last valid data row)
+  let lastDate = null, lastMm = null;
+  for (let i = dataRows.length - 1; i >= 0; i--) {
+    const row = dataRows[i];
+    const mm = parseFloat((row[1] || '').replace(',', '.'));
+    if (isNaN(mm)) continue;
+    const tsRaw = row[3] || row[0] || '';
+    let dateStr = null;
+    if (/^\d{4}-\d{2}/.test(tsRaw)) {
+      dateStr = tsRaw.replace(/\./, ':').replace(/\./, ':').substring(0, 16);
+    } else {
+      const serial = parseFloat(String(tsRaw).replace(',', '.'));
+      if (!isNaN(serial)) {
+        const d = new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000);
+        dateStr = d.toISOString().substring(0, 10);
+      }
+    }
+    if (dateStr) { lastDate = dateStr; lastMm = mm; break; }
+  }
+
+  return { years, months, data, lastDate, lastMm };
 }
 
 // ── Heatmap colour interpolation (white → deep green) ─────────────────
@@ -446,6 +482,13 @@ async function init() {
 
   document.getElementById('status').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+
+  if (parsed.lastDate !== null) {
+    const el = document.getElementById('lastEntry');
+    const mmStr = parsed.lastMm === 0 ? '0 mm' : parsed.lastMm + ' mm';
+    el.innerHTML = `Senaste loggade: <strong>${parsed.lastDate}</strong> &nbsp;·&nbsp; <strong>${mmStr}</strong>`;
+    el.style.display = 'block';
+  }
   document.getElementById('updatedLabel').textContent =
     'Uppdaterad ' + new Date().toLocaleDateString('sv-SE');
 
